@@ -10,20 +10,20 @@
     "cli"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/kevin51jiang/json-repair#readme",
+  "homepage": "https://github.com/kevin51jiang/ai-json-repair#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kevin51jiang/json-repair.git"
+    "url": "git+https://github.com/kevin51jiang/ai-json-repair.git"
   },
   "bugs": {
-    "url": "https://github.com/kevin51jiang/json-repair/issues"
+    "url": "https://github.com/kevin51jiang/ai-json-repair/issues"
   },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "json-repair": "./dist/bin.cjs"
+    "json-repair": "dist/bin.cjs"
   },
   "exports": {
     ".": {

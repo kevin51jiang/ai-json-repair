@@ -154,7 +154,7 @@ On each push to `main`, the release workflow will:
 The workflow is set up for npm trusted publishing with GitHub Actions OIDC. To enable it on npm:
 
 1. Open the `ai-json-repair` package settings on npm.
-2. Add a trusted publisher for `kevin51jiang/json-repair`.
+2. Add a trusted publisher for `kevin51jiang/ai-json-repair`.
 3. Select the workflow file `.github/workflows/release.yml`.
 
 No `NPM_TOKEN` secret is required once trusted publishing is enabled.
