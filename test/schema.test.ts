@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as z from "zod";
 
 import { ContextValue } from "../src/parser/context";
 import {
@@ -89,6 +90,63 @@ describe("schema helpers", () => {
       required: ["value"],
     });
     await expect(loadSchemaModule(`${modulePath}:missingSchema`)).rejects.toThrow("not found");
+  });
+
+  it("accepts basic Zod 4 JSON Schema conversions", async () => {
+    const zodSchema = z.object({
+      name: z.string(),
+      age: z.number(),
+    });
+    const jsonSchema = z.toJSONSchema(zodSchema);
+
+    expect(schemaFromInput(jsonSchema)).toEqual(jsonSchema);
+    expect(repairWithSchema('{"name":"Ada","age":"42"}', jsonSchema)).toEqual({
+      name: "Ada",
+      age: 42,
+    });
+  });
+
+  it("accepts Zod-backed schema adapters exposing toJSONSchema()", async () => {
+    const schemaAdapter = {
+      toJSONSchema() {
+        return z.toJSONSchema(
+          z.object({
+            active: z.boolean(),
+            count: z.number(),
+          }),
+        );
+      },
+    };
+
+    expect(repairWithSchema('{"active":"yes","count":"2"}', schemaAdapter)).toEqual({
+      active: true,
+      count: 2,
+    });
+  });
+
+  it("loads Zod-backed schema modules through loadSchemaModule", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "json-repair-zod-schema-"));
+    const modulePath = join(dir, "schema.mjs");
+    writeFileSync(
+      modulePath,
+      [
+        'import * as z from "zod";',
+        'export const zodJsonSchema = z.toJSONSchema(z.object({ value: z.number() }));',
+        'export class ZodSchemaModel {',
+        '  static toJSONSchema() {',
+        '    return z.toJSONSchema(z.object({ label: z.string() }));',
+        "  }",
+        "}",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await expect(loadSchemaModule(`${modulePath}:zodJsonSchema`)).resolves.toEqual(
+      z.toJSONSchema(z.object({ value: z.number() })),
+    );
+    await expect(loadSchemaModule(`${modulePath}:ZodSchemaModel`)).resolves.toEqual(
+      z.toJSONSchema(z.object({ label: z.string() })),
+    );
   });
 });
 
@@ -279,6 +337,16 @@ describe("schema-guided parsing", () => {
     });
   });
 
+  it("raises for missing required properties in standard mode", () => {
+    const schema = {
+      type: "object",
+      properties: { required_value: { type: "integer", default: 1 } },
+      required: ["required_value"],
+    };
+
+    expect(() => repairWithSchema("{}", schema)).toThrow("Missing required properties");
+  });
+
   it("applies schema on the native JSON fast path and keeps logging sensible", () => {
     const schema = {
       type: "object",
@@ -297,7 +365,6 @@ describe("schema-guided parsing", () => {
     const [validFastPath, emptyLogs] = jsonRepair('{"value": 1}', {
       schema,
       logging: true,
-      returnObjects: true,
     } as never) as unknown as [unknown, unknown[]];
     expect(validFastPath).toEqual({ value: 1 });
     expect(emptyLogs).toEqual([]);
@@ -305,10 +372,13 @@ describe("schema-guided parsing", () => {
     const [repairedFastPath, repairLogs] = jsonRepair('{"value": "1"}', {
       schema,
       logging: true,
-      returnObjects: true,
     } as never) as unknown as [unknown, unknown[]];
     expect(repairedFastPath).toEqual({ value: 1 });
     expect(repairLogs.length).toBeGreaterThanOrEqual(0);
+
+    expect(() =>
+      jsonRepair('"1"', { schema: { type: "integer" }, skipJsonParse: true, returnObjects: true } as never),
+    ).toThrow("integer");
   });
 
   it("enforces schema/strict exclusivity and salvage requiring a schema", () => {
@@ -346,6 +416,18 @@ describe("schema-guided parsing", () => {
         schemaRepairMode: "salvage",
       }),
     ).toEqual({ items: [{ id: 1, score: 85.6 }] });
+
+    expect(
+      jsonRepair('{"items":[{"id":1,"score":85.6},{"id":2,"score":"N/A"}]}', {
+        schema: arraySchema,
+        skipJsonParse: true,
+        logging: true,
+        schemaRepairMode: "salvage",
+      } as never),
+    ).toEqual([
+      { items: [{ id: 1, score: 85.6 }] },
+      [{ context: "$.items[1]", text: "Dropped invalid array item while salvaging" }],
+    ]);
 
     const mappedObjectSchema = {
       type: "object",

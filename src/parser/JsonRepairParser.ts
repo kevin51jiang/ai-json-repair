@@ -1,5 +1,6 @@
 import type { JsonNode, JsonSchema, RepairLog } from "../types";
 import type { SchemaRepairer } from "../schema/schemaRepair";
+import type { StringFileWrapper } from "../utils/stringFileWrapper";
 import { STRING_DELIMITERS } from "./constants";
 import { JsonContext } from "./context";
 import { ObjectComparer } from "./objectComparer";
@@ -10,14 +11,14 @@ import { parseObject } from "./parseObject";
 import { parseString } from "./parseString";
 
 export class JsonRepairParser {
-  public source: string;
+  public source: string | StringFileWrapper;
   public index = 0;
   public context = new JsonContext();
   public logger: RepairLog[] = [];
   public schemaRepairer: SchemaRepairer | null = null;
 
   public constructor(
-    source: string,
+    source: string | StringFileWrapper,
     public readonly logging = false,
     public readonly streamStable = false,
     public readonly strict = false,
@@ -102,7 +103,47 @@ export class JsonRepairParser {
   }
 
   public getCharAt(count = 0): string | undefined {
-    return this.source[this.index + count];
+    const absoluteIndex = this.index + count;
+    if (absoluteIndex < 0) {
+      return undefined;
+    }
+    if (typeof this.source === "string") {
+      return this.source[absoluteIndex];
+    }
+    return this.source.get(absoluteIndex) || undefined;
+  }
+
+  public getSourceLength(): number {
+    return typeof this.source === "string" ? this.source.length : this.source.size();
+  }
+
+  public getAbsoluteChar(index: number): string | undefined {
+    if (index < 0) {
+      return undefined;
+    }
+    if (typeof this.source === "string") {
+      return this.source[index];
+    }
+    return this.source.get(index) || undefined;
+  }
+
+  public sliceSource(start: number, end?: number): string {
+    if (typeof this.source === "string") {
+      return this.source.slice(start, end);
+    }
+    return this.source.slice(start, end);
+  }
+
+  public indexOfInSource(searchValue: string, fromIndex: number): number {
+    if (typeof this.source === "string") {
+      return this.source.indexOf(searchValue, fromIndex);
+    }
+    return this.source.indexOf(searchValue, fromIndex);
+  }
+
+  public insertIntoSource(index: number, text: string): void {
+    const current = typeof this.source === "string" ? this.source : this.source.toString();
+    this.source = `${current.slice(0, index)}${text}${current.slice(index)}`;
   }
 
   public skipWhitespaces(): void {
@@ -123,8 +164,9 @@ export class JsonRepairParser {
     let cursor = this.index + offset;
     let backslashes = 0;
 
-    while (cursor < this.source.length) {
-      const current = this.source[cursor]!;
+    const sourceLength = this.getSourceLength();
+    while (cursor < sourceLength) {
+      const current = this.getAbsoluteChar(cursor)!;
       if (current === "\\") {
         backslashes += 1;
         cursor += 1;
@@ -137,7 +179,7 @@ export class JsonRepairParser {
       cursor += 1;
     }
 
-    return this.source.length - this.index;
+    return sourceLength - this.index;
   }
 
   public log(text: string): void {
@@ -146,9 +188,9 @@ export class JsonRepairParser {
     }
     const window = 10;
     const start = Math.max(this.index - window, 0);
-    const end = Math.min(this.index + window, this.source.length);
+    const end = Math.min(this.index + window, this.getSourceLength());
     this.logger.push({
-      context: this.source.slice(start, end),
+      context: this.sliceSource(start, end),
       text,
     });
   }
@@ -168,10 +210,10 @@ export class JsonRepairParser {
 
   private parseTopLevel(parseElement: () => JsonNode): JsonNode {
     let json = parseElement();
-    if (this.index < this.source.length) {
+    if (this.index < this.getSourceLength()) {
       this.log("The parser returned early, checking if there's more json elements");
       const items: JsonNode[] = [json];
-      while (this.index < this.source.length) {
+      while (this.index < this.getSourceLength()) {
         this.context.reset();
         const next = parseElement();
         if (this.isTruthyValue(next)) {

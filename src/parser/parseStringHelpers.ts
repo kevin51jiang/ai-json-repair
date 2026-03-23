@@ -33,9 +33,9 @@ export function parseBooleanOrNull(parser: JsonRepairParser): boolean | null | "
 }
 
 export function parseJsonLlmBlock(parser: JsonRepairParser) {
-  if (parser.source.slice(parser.index, parser.index + 7) === "```json") {
+  if (parser.sliceSource(parser.index, parser.index + 7) === "```json") {
     const offset = parser.skipToCharacter("`", 7);
-    if (parser.source.slice(parser.index + offset, parser.index + offset + 3) === "```") {
+    if (parser.sliceSource(parser.index + offset, parser.index + offset + 3) === "```") {
       parser.index += 7;
       return parser.parseJson();
     }
@@ -50,22 +50,22 @@ export function tryParseSimpleQuotedString(parser: JsonRepairParser): string | u
   }
 
   const start = parser.index + 1;
-  const end = parser.source.indexOf('"', start);
+  const end = parser.indexOfInSource('"', start);
   if (end === -1) {
     return undefined;
   }
 
-  const value = parser.source.slice(start, end);
+  const value = parser.sliceSource(start, end);
   if (value.includes("\\") || value.includes("\n") || value.includes("\r")) {
     return undefined;
   }
 
   let nextIndex = end + 1;
-  while (nextIndex < parser.source.length && /\s/u.test(parser.source[nextIndex]!)) {
+  while (nextIndex < parser.getSourceLength() && /\s/u.test(parser.getAbsoluteChar(nextIndex)!)) {
     nextIndex += 1;
   }
 
-  const nextChar = parser.source[nextIndex];
+  const nextChar = parser.getAbsoluteChar(nextIndex);
   const currentContext = parser.context.current;
   if (currentContext === ContextValue.ObjectKey) {
     if (nextChar !== ":") {

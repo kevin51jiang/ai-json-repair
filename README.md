@@ -8,6 +8,8 @@ TypeScript/JavaScript port of [mangiucugna/json_repair](https://github.com/mangi
 npm install ai-json-repair
 ```
 
+The package also ships a `json-repair` CLI binary, so after installing it you can repair files or pipe JSON through stdin.
+
 The main API is intentionally simple:
 
 ```ts
@@ -26,37 +28,25 @@ const value = jsonRepair(`{name: Ada, active: TRUE}`, { returnObjects: true });
 const sameValue = loads(`{name: Ada, active: TRUE}`);
 ```
 
+When `logging: true` is enabled, the repair functions return a tuple of the repaired parsed value and the repair log:
+
+```ts
+import { jsonRepair } from "ai-json-repair";
+
+const [repairedValue, logs] = jsonRepair(`{"name": "Ada"`, { logging: true });
+// repairedValue: { name: "Ada" }
+// logs: [{ context: "...", text: "..." }, ...]
+```
+
 ## API
 
 ```ts
 jsonRepair(input: string, options?)
 jsonRepair.parse(input: string, options?)
 loads(input: string, options?)
+load(fileOrHandle, options?)
 fromFile(path: string, options?)
 ```
-
-## CLI
-
-After installation, the package exposes a `json-repair` command:
-
-```bash
-json-repair broken.json
-json-repair broken.json --inline
-json-repair broken.json --output fixed.json
-cat broken.json | json-repair --indent 2
-```
-
-Supported CLI flags:
-
-- `-i`, `--inline`
-- `-o`, `--output <file>`
-- `--indent <number>`
-- `--ensure-ascii`
-- `--skip-json-parse`
-- `--strict`
-- `--schema <file>`
-- `--schema-module <path:exportName>`
-- `--schema-repair-mode <repair|salvage>`
 
 Supported core options:
 
@@ -69,6 +59,37 @@ Supported core options:
 - `schemaRepairMode`
 - `ensureAscii`
 - `indent`
+
+## CLI
+
+Install the package normally, then run the bundled binary:
+
+```bash
+pnpm add ai-json-repair
+npx json-repair broken.json
+```
+
+By default the CLI reads a file or stdin and writes repaired JSON to stdout. Use `--output` to write to a different file, or `--inline` to update the input file in place:
+
+```bash
+npx json-repair broken.json --indent 2
+npx json-repair broken.json --output fixed.json
+cat broken.json | npx json-repair
+```
+
+Supported CLI flags mirror the packaged parser surface that the binary exposes:
+
+- `--indent <n>`
+- `--ensure-ascii`
+- `--skip-json-parse`
+- `--strict`
+- `--schema <path>`
+- `--schema-module <specifier>`
+- `--schema-repair-mode <standard|salvage>`
+- `--inline`
+- `--output <path>`
+
+`--inline` and `--output` are mutually exclusive, and `--strict` cannot be combined with schema-based repairs.
 
 ## JSON Schema
 

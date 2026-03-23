@@ -48,3 +48,4 @@ export interface JsonSchemaObject {
 export type SchemaRepairMode = "salvage" | "standard";
 
 export type JsonRepairResult<T extends boolean | undefined> = T extends true ? JsonValue : string;
+export type LoggedJsonRepairResult = [JsonValue, RepairLog[]];

@@ -271,7 +271,7 @@ export function parseString(parser: JsonRepairParser): JsonNode {
 
       if (char === "u" || char === "x") {
         const numChars = char === "u" ? 4 : 2;
-        const nextChars = parser.source.slice(parser.index + 1, parser.index + 1 + numChars);
+        const nextChars = parser.sliceSource(parser.index + 1, parser.index + 1 + numChars);
         if (nextChars.length === numChars && /^[0-9A-Fa-f]+$/u.test(nextChars)) {
           parser.log("Found a unicode escape sequence, normalizing it");
           stringAccumulator = `${stringAccumulator.slice(0, -1)}${String.fromCodePoint(parseInt(nextChars, 16))}`;
