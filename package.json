@@ -1,7 +1,7 @@
 {
   "name": "ai-json-repair",
   "version": "0.0.1",
-  "description": "TypeScript port of mangiucugna/json_repair",
+  "description": "Repair malformed JSON in TypeScript and JavaScript",
   "keywords": [
     "json",
     "repair",
