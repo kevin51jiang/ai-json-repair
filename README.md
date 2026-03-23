@@ -1,11 +1,17 @@
-# json-repair
+# ai-json-repair
 
 TypeScript/JavaScript port of [mangiucugna/json_repair](https://github.com/mangiucugna/json_repair).
+
+## Installation
+
+```bash
+npm install ai-json-repair
+```
 
 The main API is intentionally simple:
 
 ```ts
-import { jsonRepair } from "json-repair";
+import { jsonRepair } from "ai-json-repair";
 
 const fixed = jsonRepair(`{name: "Ada", skills: [ts python]}`);
 // {"name": "Ada", "skills": ["ts", "python"]}
@@ -14,7 +20,7 @@ const fixed = jsonRepair(`{name: "Ada", skills: [ts python]}`);
 If you want the repaired value as a JavaScript object:
 
 ```ts
-import { jsonRepair, loads } from "json-repair";
+import { jsonRepair, loads } from "ai-json-repair";
 
 const value = jsonRepair(`{name: Ada, active: TRUE}`, { returnObjects: true });
 const sameValue = loads(`{name: Ada, active: TRUE}`);
@@ -28,6 +34,29 @@ jsonRepair.parse(input: string, options?)
 loads(input: string, options?)
 fromFile(path: string, options?)
 ```
+
+## CLI
+
+After installation, the package exposes a `json-repair` command:
+
+```bash
+json-repair broken.json
+json-repair broken.json --inline
+json-repair broken.json --output fixed.json
+cat broken.json | json-repair --indent 2
+```
+
+Supported CLI flags:
+
+- `-i`, `--inline`
+- `-o`, `--output <file>`
+- `--indent <number>`
+- `--ensure-ascii`
+- `--skip-json-parse`
+- `--strict`
+- `--schema <file>`
+- `--schema-module <path:exportName>`
+- `--schema-repair-mode <repair|salvage>`
 
 Supported core options:
 
@@ -46,7 +75,7 @@ Supported core options:
 You can guide repairs with a JSON Schema:
 
 ```ts
-import { jsonRepair } from "json-repair";
+import { jsonRepair } from "ai-json-repair";
 
 const schema = {
   type: "object",

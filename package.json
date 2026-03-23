@@ -1,12 +1,30 @@
 {
-  "name": "json-repair",
+  "name": "ai-json-repair",
   "version": "0.0.1",
   "description": "TypeScript port of mangiucugna/json_repair",
+  "keywords": [
+    "json",
+    "repair",
+    "parser",
+    "schema",
+    "cli"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/kevin51jiang/json-repair#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kevin51jiang/json-repair.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kevin51jiang/json-repair/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "json-repair": "./dist/bin.cjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,9 +36,14 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "build": "tsup src/index.ts src/bin.ts --format esm,cjs --dts",
     "check": "tsc --noEmit",
+    "prepack": "pnpm build",
+    "prepublishOnly": "pnpm check && pnpm test && pnpm build",
     "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
