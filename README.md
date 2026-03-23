@@ -123,3 +123,40 @@ pnpm check
 pnpm test
 pnpm build
 ```
+
+## Releases
+
+This repository is configured for automated releases from `main` with `semantic-release`.
+
+Release rules:
+
+- `fix:` publishes a patch release
+- `feat:` publishes a minor release
+- `BREAKING CHANGE:` or `!` publishes a major release
+
+Examples:
+
+```text
+fix: preserve escaped quotes in strings
+feat: add schema-driven salvage mode
+feat!: change default CLI exit behavior
+```
+
+On each push to `main`, the release workflow will:
+
+- compute the next version from Conventional Commits
+- create a git tag like `v1.2.3`
+- publish the package to npm
+- create a GitHub release
+
+### npm Trusted Publishing
+
+The workflow is set up for npm trusted publishing with GitHub Actions OIDC. To enable it on npm:
+
+1. Open the `ai-json-repair` package settings on npm.
+2. Add a trusted publisher for `kevin51jiang/json-repair`.
+3. Select the workflow file `.github/workflows/release.yml`.
+
+No `NPM_TOKEN` secret is required once trusted publishing is enabled.
+
+If npm requires the package to exist before a trusted publisher can be attached, publish `ai-json-repair` once manually to claim the name, then switch over to the OIDC workflow.
