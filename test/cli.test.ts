@@ -35,6 +35,39 @@ describe("cli parity", () => {
     expect(stdout.join("")).toContain('"value": 1');
   });
 
+  it("supports stdin input and schema-driven parsing modes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "json-repair-cli-"));
+    const inputPath = join(dir, "input.json");
+    const schemaPath = join(dir, "schema.json");
+    const modulePath = join(dir, "schema.mjs");
+    writeFileSync(inputPath, '{"value":"1"}', "utf8");
+    writeFileSync(
+      schemaPath,
+      JSON.stringify({ type: "object", properties: { value: { type: "integer" } }, required: ["value"] }),
+      "utf8",
+    );
+    writeFileSync(
+      modulePath,
+      'export const schemaObj = { type: "object", properties: { value: { type: "integer" } }, required: ["value"] };',
+      "utf8",
+    );
+
+    let capture = createIO("{key:value");
+    let result = await cli(["--indent", "0"], capture.io);
+    expect(result).toBe(0);
+    expect(capture.stdout.join("")).toBe('{"key": "value"}\n');
+
+    capture = createIO();
+    result = await cli([inputPath, "--indent", "0", "--schema", schemaPath, "--skip-json-loads"], capture.io);
+    expect(result).toBe(0);
+    expect(capture.stdout.join("")).toBe('{"value": 1}\n');
+
+    capture = createIO();
+    result = await cli([inputPath, "--indent", "0", "--schema-module", `${modulePath}:schemaObj`, "--skip-json-loads"], capture.io);
+    expect(result).toBe(0);
+    expect(capture.stdout.join("")).toBe('{"value": 1}\n');
+  });
+
   it("supports inline replacement and output redirection", async () => {
     const dir = mkdtempSync(join(tmpdir(), "json-repair-cli-"));
     const inputPath = join(dir, "input.json");
@@ -65,5 +98,15 @@ describe("cli parity", () => {
     result = await cli(["--schema-repair-mode", "salvage"], capture.io);
     expect(result).toBe(1);
     expect(capture.stderr.join("")).toContain("requires --schema");
+
+    capture = createIO();
+    result = await cli(["--schema", "schema.json", "--strict"], capture.io);
+    expect(result).toBe(1);
+    expect(capture.stderr.join("")).toContain("--strict cannot be used with --schema");
+
+    capture = createIO();
+    result = await cli(["--schema", "schema.json", "--schema-module", "schema.mjs:schemaObj"], capture.io);
+    expect(result).toBe(1);
+    expect(capture.stderr.join("")).toContain("both --schema and --schema-module");
   });
 });

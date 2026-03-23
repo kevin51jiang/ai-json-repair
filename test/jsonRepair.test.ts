@@ -31,6 +31,7 @@ describe("jsonRepair core", () => {
     expect(repairText('{"key": 12345678901234567890}')).toBe('{"key": 12345678901234567890}');
     expect(repairText('{"key": "value\\u263a"}')).toBe('{"key": "value\\u263a"}');
     expect(repairText('{"key": "value\\nvalue"}')).toBe('{"key": "value\\nvalue"}');
+    expect(repairText("{'test_中国人_ascii':'统一码'}", { ensureAscii: false })).toBe('{"test_中国人_ascii": "统一码"}');
   });
 
   it("returns useful parsed values through loads and returnObjects", () => {
@@ -135,6 +136,11 @@ describe("jsonRepair core", () => {
     expect(repairValue("true")).toBe(true);
     expect(repairValue("false")).toBe(false);
     expect(repairValue("null")).toBe(null);
+    expect(repairValue('{"key": TRUE, "key2": FALSE, "key3": Null}   ')).toEqual({
+      key: true,
+      key2: false,
+      key3: null,
+    });
   });
 
   it("keeps streaming output stable when requested", () => {
@@ -157,7 +163,7 @@ describe("jsonRepair core", () => {
   });
 
   it("returns repair logs when logging is enabled", () => {
-    const [repaired, logs] = jsonRepair('{"key": "value}', { logging: true, returnObjects: true }) as [
+    const [repaired, logs] = jsonRepair('{"key": "value}', { logging: true }) as [
       { key: string },
       RepairLog[],
     ];
@@ -172,6 +178,18 @@ describe("jsonRepair core", () => {
         context: 'y": "value}',
         text: "While parsing a string, we missed the closing quote, ignoring",
       },
+    ]);
+  });
+
+  it("returns parsed values when logging is enabled on the native fast path", () => {
+    expect(jsonRepair("{}", { logging: true })).toEqual([{}, []]);
+    expect(jsonRepair('{"value": "1"}', { schema: { type: "object", properties: { value: { type: "integer" } }, required: ["value"] }, logging: true } as never)).toEqual([
+      { value: 1 },
+      [],
+    ]);
+    expect(jsonRepair('{"key": "value", "items": ["alpha", "beta"]}', { logging: true, returnObjects: true })).toEqual([
+      { key: "value", items: ["alpha", "beta"] },
+      [],
     ]);
   });
 });
@@ -221,6 +239,9 @@ describe("jsonRepair primitives", () => {
     expect(loads("1.2")).toBe(1.2);
     expect(loads('{"value": 82_461_110}')).toEqual({ value: 82461110 });
     expect(loads('{"value": 1_234.5_6}')).toEqual({ value: 1234.56 });
+    expect(repairText(' - { "test_key": ["test_value", "test_value2"] }')).toBe(
+      '{"test_key": ["test_value", "test_value2"]}',
+    );
     expect(repairText('{"key": 1/3}')).toBe('{"key": "1/3"}');
     expect(repairText('{"key": .25}')).toBe('{"key": 0.25}');
     expect(repairText('{"here": "now", "key": 1/3, "foo": "bar"}')).toBe(
@@ -291,6 +312,9 @@ describe("jsonRepair primitives", () => {
       '[{"key": "value", "notes": "lorem \\"ipsum\\", sic."}]',
     );
     expect(repairText('{"key": ""value"}')).toBe('{"key": "value"}');
+    expect(repairText('{"foo": "\\"bar\\""')).toBe('{"foo": "\\"bar\\""}');
+    expect(repairText('{"" key":"val"')).toBe('{" key": "val"}');
+    expect(repairValue('{"key": "value", 5: "value"}')).toEqual({ key: "value", 5: "value" });
     expect(repairText('{"key": "v"alue"}')).toBe('{"key": "v\\"alue\\""}');
     expect(repairText('{"key": value "key2" : "value2" ')).toBe('{"key": "value", "key2": "value2"}');
     expect(repairText('{"key": "lorem ipsum ... "sic " tamet. ...}')).toBe(
@@ -352,6 +376,17 @@ describe("jsonRepair primitives", () => {
     expect(repairText('{"response": "```json{}"')).toBe('{"response": "```json{}"}');
   });
 
+  it("logs invalid code fences while still repairing the surrounding string", () => {
+    const [repaired, logs] = jsonRepair('{"key": "```json nope\\n"}', {
+      skipJsonParse: true,
+      returnObjects: true,
+      logging: true,
+    }) as [{ key: string }, RepairLog[]];
+
+    expect(repaired).toEqual({ key: "```json nope" });
+    expect(logs.some((entry) => entry.text.includes("did not enclose valid JSON"))).toBe(true);
+  });
+
   it("handles arrays and object-array crossover", () => {
     expect(loads("[]")).toEqual([]);
     expect(loads("[1, 2, 3, 4]")).toEqual([1, 2, 3, 4]);
@@ -360,8 +395,8 @@ describe("jsonRepair primitives", () => {
     expect(repairText("[{]")).toBe("[]");
     expect(repairText("[")).toBe("[]");
     expect(repairText('["')).toBe("[]");
-    expect(repairText("]")).toBe("");
     expect(repairText("[1, 2, 3,")).toBe("[1, 2, 3]");
+    expect(repairText("]")).toBe("");
     expect(repairText("[1, 2, 3, ...]")).toBe("[1, 2, 3]");
     expect(repairText("[1, 2, ... , 3]")).toBe("[1, 2, 3]");
     expect(repairText("[1, 2, '...', 3]")).toBe('[1, 2, "...", 3]');
@@ -418,6 +453,12 @@ describe("jsonRepair primitives", () => {
     expect(repairText('{"key": "value"}, []')).toBe('{"key": "value"}');
     expect(repairText('{"key": "value"}, ["abc"]')).toBe('[{"key": "value"}, ["abc"]]');
     expect(repairText('{"key": "value"}, {}')).toBe('{"key": "value"}');
+    expect(repairText('{"key": "value"}, "key2": "value2"}')).toBe('{"key": "value", "key2": "value2"}');
+    expect(repairText('{"key": "value"}, "key2": }')).toBe('{"key": "value", "key2": ""}');
+    expect(repairText('{"key": "value"}, "" : "value2"}')).toBe('{"key": "value", "": "value2"}');
+    expect(repairText('{"key1": "value1"}, "key2": "value2", "key3": "value3"}')).toBe(
+      '{"key1": "value1", "key2": "value2", "key3": "value3"}',
+    );
     expect(repairText('{key:value,key2:value2}')).toBe('{"key": "value", "key2": "value2"}');
     expect(repairText('{"key:"value"}')).toBe('{"key": "value"}');
     expect(repairText('{"key:value}')).toBe('{"key": "value"}');

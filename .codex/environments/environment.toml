@@ -12,3 +12,8 @@ command = '''
 pnpm i
 pnpm test
 '''
+
+[[actions]]
+name = "test"
+icon = "test"
+command = "pnpm check && pnpm test"

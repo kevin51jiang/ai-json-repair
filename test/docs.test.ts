@@ -13,10 +13,27 @@ describe("docs api parity", () => {
     expect(response.body).toEqual([{ value: 1 }, expect.any(Array)]);
   });
 
+  it("keeps existing behavior when schema is omitted or null", async () => {
+    expect(handleRepairJsonRequest({ malformedJSON: '{"value":"1"}' })).toEqual({
+      statusCode: 200,
+      body: [{ value: "1" }, []],
+    });
+    expect(handleRepairJsonRequest({ malformedJSON: '{"value":"1"}', schema: null })).toEqual({
+      statusCode: 200,
+      body: [{ value: "1" }, []],
+    });
+  });
+
   it("rejects invalid schema and schemaRepairMode inputs with 400s", async () => {
     expect(handleRepairJsonRequest({ malformedJSON: '{"value":"1"}', schema: [] }).statusCode).toBe(400);
     expect(handleRepairJsonRequest({ malformedJSON: '{"value":"1"}', schemaRepairMode: true }).statusCode).toBe(400);
     expect(handleRepairJsonRequest({ malformedJSON: '{"value":"1"}', schemaRepairMode: "unknown" }).statusCode).toBe(400);
+  });
+
+  it("rejects non-object request bodies with 400s instead of throwing", async () => {
+    expect(handleRepairJsonRequest(null).statusCode).toBe(400);
+    expect(handleRepairJsonRequest("not-an-object").statusCode).toBe(400);
+    expect(handleRepairJsonRequest(["not", "an", "object"]).statusCode).toBe(400);
   });
 
   it("accepts salvage mode for schema-guided array repair", async () => {
@@ -44,5 +61,17 @@ describe("docs api parity", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toEqual([{ items: [{ id: 1, score: 85.6 }] }, expect.any(Array)]);
+  });
+
+  it("returns schema validation failures as 400s", async () => {
+    const response = handleRepairJsonRequest({
+      malformedJSON: '"bbb"',
+      schema: { type: "string", pattern: "^a+$" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({
+      error: expect.stringContaining("pattern"),
+    });
   });
 });

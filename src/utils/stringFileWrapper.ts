@@ -1,3 +1,4 @@
+import { readSync } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 
 export class StringFileWrapper {
@@ -5,16 +6,17 @@ export class StringFileWrapper {
   public readonly bufferLength: number;
   public readonly chunkPositions = [0];
   public length: number | undefined;
-  private readonly text: string;
+  private readonly text: string | null;
+  private readonly fd: number | null;
 
-  public constructor(text: string, chunkLength: number) {
-    this.text = text;
+  public constructor(textOrFd: string | number, chunkLength: number) {
+    this.text = typeof textOrFd === "string" ? textOrFd : null;
+    this.fd = typeof textOrFd === "number" ? textOrFd : null;
     this.bufferLength = !chunkLength || chunkLength < 2 ? 1_000_000 : chunkLength;
   }
 
   public static async fromFileHandle(handle: FileHandle, chunkLength: number): Promise<StringFileWrapper> {
-    const text = await handle.readFile({ encoding: "utf8" });
-    return new StringFileWrapper(text, chunkLength);
+    return new StringFileWrapper(handle.fd, chunkLength);
   }
 
   public getBuffer(index: number): string {
@@ -29,16 +31,16 @@ export class StringFileWrapper {
 
     this.ensureChunkPosition(index);
     const start = this.chunkPositions[index];
-    if (start === undefined || start >= this.text.length) {
+    if (start === undefined || (this.text !== null && start >= this.text.length)) {
       throw new Error("Chunk index out of range");
     }
 
-    const chunk = this.text.slice(start, start + this.bufferLength);
+    const { chunk, nextPosition } = this.readChunk(start);
     if (!chunk) {
       throw new Error("Chunk index out of range");
     }
 
-    this.chunkPositions[index + 1] ??= Math.min(start + chunk.length, this.text.length);
+    this.chunkPositions[index + 1] ??= nextPosition;
     if (chunk.length < this.bufferLength) {
       this.length = index * this.bufferLength + chunk.length;
     }
@@ -86,23 +88,59 @@ export class StringFileWrapper {
     return buffer[normalizedIndex % this.bufferLength] ?? "";
   }
 
+  public slice(start?: number, end?: number): string {
+    return this.get({ start, stop: end });
+  }
+
+  public indexOf(searchValue: string, fromIndex = 0): number {
+    const totalLength = this.size();
+    let start = fromIndex;
+    if (start < 0) {
+      start = Math.max(totalLength + start, 0);
+    }
+    if (searchValue === "") {
+      return Math.min(start, totalLength);
+    }
+
+    const limit = totalLength - searchValue.length;
+    for (let cursor = start; cursor <= limit; cursor += 1) {
+      if (this.get({ start: cursor, stop: cursor + searchValue.length }) === searchValue) {
+        return cursor;
+      }
+    }
+
+    return -1;
+  }
+
   public size(): number {
     if (this.length === undefined) {
-      this.length = this.text.length;
+      if (this.text !== null) {
+        this.length = this.text.length;
+      } else {
+        while (this.length === undefined) {
+          this.ensureChunkPosition(this.chunkPositions.length);
+        }
+      }
     }
     return this.length;
+  }
+
+  public toString(): string {
+    if (this.text !== null) {
+      return this.text;
+    }
+    return this.slice(0, this.size());
   }
 
   public ensureChunkPosition(chunkIndex: number): void {
     while (this.chunkPositions.length <= chunkIndex) {
       const previousIndex = this.chunkPositions.length - 1;
       const start = this.chunkPositions[this.chunkPositions.length - 1]!;
-      const chunk = this.text.slice(start, start + this.bufferLength);
-      const end = start + chunk.length;
+      const { chunk, nextPosition } = this.readChunk(start);
       if (chunk.length < this.bufferLength) {
         this.length = previousIndex * this.bufferLength + chunk.length;
       }
-      this.chunkPositions.push(end);
+      this.chunkPositions.push(nextPosition);
       if (!chunk) {
         break;
       }
@@ -150,6 +188,46 @@ export class StringFileWrapper {
     }
     const endSlice = this.getBuffer(bufferEnd).slice(0, stopMod);
     return startSlice + middle.join("") + endSlice;
+  }
+
+  private readChunk(start: number): { chunk: string; nextPosition: number } {
+    if (this.text !== null) {
+      const chunk = this.text.slice(start, start + this.bufferLength);
+      return {
+        chunk,
+        nextPosition: Math.min(start + chunk.length, this.text.length),
+      };
+    }
+
+    if (this.fd === null) {
+      throw new Error("StringFileWrapper has no backing source");
+    }
+
+    const decoder = new TextDecoder("utf8");
+    const readSize = Math.max(1024, this.bufferLength * 4);
+    const buffer = Buffer.allocUnsafe(readSize);
+    let cursor = start;
+    let chunk = "";
+
+    while (chunk.length < this.bufferLength) {
+      const bytesRead = readSync(this.fd, buffer, 0, buffer.length, cursor);
+      if (bytesRead === 0) {
+        chunk += decoder.decode();
+        break;
+      }
+      cursor += bytesRead;
+      chunk += decoder.decode(buffer.subarray(0, bytesRead), { stream: true });
+    }
+
+    if (chunk.length <= this.bufferLength) {
+      return { chunk, nextPosition: cursor };
+    }
+
+    const normalized = chunk.slice(0, this.bufferLength);
+    return {
+      chunk: normalized,
+      nextPosition: start + Buffer.byteLength(normalized, "utf8"),
+    };
   }
 }
 

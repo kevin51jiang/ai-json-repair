@@ -6,18 +6,24 @@ export interface RepairJsonResponse {
   statusCode: number;
 }
 
-export function handleRepairJsonRequest(body: Record<string, unknown>): RepairJsonResponse {
-  const malformedJSON = body.malformedJSON;
+export function handleRepairJsonRequest(body: unknown): RepairJsonResponse {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return { statusCode: 400, body: { error: "Request JSON must be an object." } };
+  }
+
+  const requestBody = body as Record<string, unknown>;
+
+  const malformedJSON = requestBody.malformedJSON;
   if (typeof malformedJSON !== "string") {
     return { statusCode: 400, body: { error: "malformedJSON must be a string." } };
   }
 
-  const schema = body.schema;
+  const schema = requestBody.schema;
   if (schema !== undefined && schema !== null && schema !== true && schema !== false && (typeof schema !== "object" || Array.isArray(schema))) {
     return { statusCode: 400, body: { error: "schema must be a JSON object or boolean." } };
   }
 
-  const schemaRepairMode = body.schemaRepairMode;
+  const schemaRepairMode = requestBody.schemaRepairMode;
   if (schemaRepairMode !== undefined && typeof schemaRepairMode !== "string") {
     return { statusCode: 400, body: { error: "schemaRepairMode must be a string." } };
   }

@@ -173,7 +173,7 @@ export function parseObject(parser: JsonRepairParser, schema?: JsonSchema, path 
             "While parsing an object we found a duplicate key, closing the object here and rolling back the index",
           );
           parser.index = rollbackIndex - 1;
-          parser.source = `${parser.source.slice(0, parser.index + 1)}{${parser.source.slice(parser.index + 1)}`;
+          parser.insertIntoSource(parser.index + 1, "{");
           break;
         }
       }
